@@ -31,6 +31,8 @@ async function initDb() {
     `);
     console.log("Database initialized");
 
+
+
     await db.close(); // Close the database after initializing
   } catch (error) {
     console.error("Error initializing database:", error);
@@ -43,15 +45,18 @@ export async function POST(req) {
     await initDb(); // Ensure the database schema is initialized
 
     const data = await req.json();
-    const { name, qty, description, comments } = data;
+    const { name, qty, description, comments,enabled } = data;
 
     db = await opendb();
 
     // Use a prepared statement for inserting data
     const result = await db.run(
-      `INSERT INTO itemmaster (name, quantity, description, comments) VALUES (?, ?, ?, ?)`,
-      [name, qty, description, comments]
+      `INSERT INTO itemmaster (name, quantity, description, comments,enabled) VALUES (?, ?, ?, ?, ?)`,
+      [name, qty, description, comments  ,enabled]
     );
+
+
+   console.log(enabled,"rohith")
 
     return NextResponse.json({ 
       message: "Data inserted successfully", 

@@ -6,9 +6,13 @@ import {
 } from "@heroicons/react/24/solid";
 import { useState, useEffect } from "react";
 import { IoSaveOutline } from "react-icons/io5";
+import { Switch } from "@headlessui/react";
 
 export default function Home() {
   const [editingItem, setEditingItem] = useState(null);
+  const [enabledItems, setEnabledItems] = useState({});
+
+  const [selected, setSelected] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     qty: "",
@@ -17,14 +21,12 @@ export default function Home() {
   });
   const [fetched, setFetched] = useState([]);
   const [selectedItems, setSelectedItems] = useState({});
-  const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleteMarkedItems, setDeleteMarkedItems] = useState({});
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -35,11 +37,12 @@ export default function Home() {
         const result = await response.json();
         setFetched(result.data || []);
 
-        const initialSelection = {};
-        result.data.forEach(item => {
-          initialSelection[item.id] = true;
+        // Initialize enabledItems with true for each item
+        const initialEnabledState = {};
+        result.data.forEach((item) => {
+          initialEnabledState[item.id] = true; // Default to true
         });
-        setSelectedItems(initialSelection);
+        setEnabledItems(initialEnabledState);
       } catch (error) {
         console.error("Fetch failed:", error);
       }
@@ -47,19 +50,6 @@ export default function Home() {
 
     fetchData();
   }, []);
-
-  const fetchData = async () => {
-    try {
-      const response = await fetch("/api/itemmaster");
-      if (!response.ok) {
-        throw new Error("Failed to fetch data");
-      }
-      const result = await response.json();
-      setFetched(result.data || []);
-    } catch (error) {
-      console.error("Fetch failed:", error);
-    }
-  };
 
   const handleEdit = (item) => {
     setFormData({
@@ -75,20 +65,38 @@ export default function Home() {
     e.preventDefault();
     try {
       const method = editingItem ? "PUT" : "POST";
-      const endpoint = editingItem ? `/api/itemmaster/${editingItem}` : "/api/itemmaster";
+      const endpoint = editingItem
+        ? `/api/itemmaster/${editingItem}`
+        : "/api/itemmaster";
 
-      const response = await fetch(endpoint, {
+      const response = await fetch("/api/itemmaster", {
         method,
-        body: JSON.stringify({ ...formData, id: editingItem }),
+        body: JSON.stringify({
+          ...formData,
+          id: editingItem,
+          enabled: enabledItems || true,
+          
+        }),
         headers: { "Content-Type": "application/json" },
       });
+      console.log(enabledItems,"enable")
 
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Something went wrong");
 
+      if (editingItem) {
+        setFetched((prev) =>
+          prev.map((item) =>
+            item.id === editingItem ? { ...item, ...formData } : item
+          )
+        );
+      } else {
+        setFetched((prev) => [...prev, { ...formData, id: result.id }]);
+      }
+
       setFormData({ name: "", qty: "", description: "", comments: "" });
       setEditingItem(null);
-      await fetchData();
+      setEnabledItems((prev) => ({ ...prev, [result.id]: true }));
     } catch (error) {
       console.error("Error while submitting:", error);
     }
@@ -101,41 +109,31 @@ export default function Home() {
     }));
   };
 
+  const handleToggleChange = (id) => {
+    setEnabledItems((prev) => ({
+      ...prev,
+      [id]: !prev[id], // Toggle the current value
+    }));
+  };
+
   const handleSelectAll = (e) => {
     const isChecked = e.target.checked;
     const newSelection = {};
-    fetched.forEach(item => {
+    fetched.forEach((item) => {
       newSelection[item.id] = isChecked;
     });
     setSelectedItems(newSelection);
   };
 
-  const openDeleteDialog = (id) => {
-    setItemToDelete(id);
-    setDeleteDialogOpen(true);
+  const handleDeleteCheckboxChange = (id) => {
+    setDeleteMarkedItems((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
   };
 
-  const handleDelete = async () => {
-    try {
-      const response = await fetch(`/api/itemmaster`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id: itemToDelete }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete the item");
-      }
-
-      await fetchData();
-      setDeleteDialogOpen(false);
-      setItemToDelete(null);
-    } catch (error) {
-      console.error("Error while deleting:", error);
-    }
+  const handleDelete = async (id) => {
+    // Delete logic here
   };
 
   return (
@@ -146,7 +144,9 @@ export default function Home() {
         <div className="mt-6 space-y-4">
           <div className="flex space-x-4">
             <div className="w-3/4">
-              <label htmlFor="name" className="block font-medium">Name</label>
+              <label htmlFor="name" className="block font-medium">
+                Name
+              </label>
               <input
                 type="text"
                 value={formData.name}
@@ -157,7 +157,9 @@ export default function Home() {
               />
             </div>
             <div className="w-1/4">
-              <label htmlFor="minquantity" className="block font-medium">Minimum Quantity</label>
+              <label htmlFor="minquantity" className="block font-medium">
+                Minimum Quantity
+              </label>
               <input
                 type="number"
                 onChange={handleChange}
@@ -169,7 +171,9 @@ export default function Home() {
             </div>
           </div>
           <div>
-            <label htmlFor="description" className="block font-medium">Description</label>
+            <label htmlFor="description" className="block font-medium">
+              Description
+            </label>
             <textarea
               className="border-2 border-gray-300 rounded-md resize-none w-full p-2"
               name="description"
@@ -181,7 +185,9 @@ export default function Home() {
             />
           </div>
           <div>
-            <label htmlFor="comments" className="block font-medium">Comments</label>
+            <label htmlFor="comments" className="block font-medium">
+              Comments
+            </label>
             <textarea
               name="comments"
               value={formData.comments}
@@ -207,23 +213,35 @@ export default function Home() {
         <table className="min-w-full border border-gray-300">
           <thead className="bg-gray-100">
             <tr>
-              <th className="border border-gray-300 px-4 py-2">
+              <th className="border border-gray-300 px-4 py-2 text-left">
                 <input
                   type="checkbox"
                   onChange={handleSelectAll}
-                  checked={fetched.every(item => selectedItems[item.id])}
+                  checked={fetched.every((item) => selectedItems[item.id])}
                 />
               </th>
-              <th className="border border-gray-300 px-4 py-2">NO</th>
-              <th className="border border-gray-300 px-4 py-2">Name</th>
-              <th className="border border-gray-300 px-4 py-2">Min <br /> Qty</th>
-              <th className="border border-gray-300 px-4 py-2">Description</th>
-              <th className="border border-gray-300 px-4 py-2">Actions</th>
+              <th className="border border-gray-300 px-2 py-2">NO</th>
+              <th className="border border-gray-300 px-2 py-2">Name</th>
+              <th className="border border-gray-300 px-2 py-2">Description</th>
+              <th className="border border-gray-300 px-2 py-2">
+                Min <br /> Qty
+              </th>
+              <th className="border border-gray-300 px-2 py-2">Actions</th>
+              <th className="border border-gray-300 px-2 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {fetched.map((item, i) => (
-              <tr key={item.id}>
+              <tr
+                key={item.id}
+                className={
+                  editingItem === item.id
+                    ? "text-green-700"
+                    : deleteMarkedItems[item.id]
+                    ? "text-red-700"
+                    : ""
+                }
+              >
                 <td className="border border-gray-300 px-4 py-2">
                   <input
                     type="checkbox"
@@ -231,36 +249,92 @@ export default function Home() {
                     onChange={() => handleCheckboxChange(item.id)}
                   />
                 </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {`IT${String(i + 1).padStart(3, '0')}`}
+                <td className="border border-gray-300 px-2 py-2">
+                  {`IT${String(i + 1).padStart(3, "0")}`}
                 </td>
-                <td className="border border-gray-300 px-4 py-2">{item.name}</td>
-                <td className="border border-gray-300 px-4 py-2 text-right">{item.quantity}</td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {item.description.length > 30
-                    ? item.description.slice(0, 30) + "..."
-                    : item.description}
+                <td className="border border-gray-300 px-2 py-2">
+                  {editingItem === item.id ? (
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleChange}
+                      className="border-2 border-gray-300 p-1 rounded-md"
+                    />
+                  ) : (
+                    item.name
+                  )}
                 </td>
-                <td className="border border-gray-300 px-4 py-2 flex space-x-3 justify-center">
+
+                <td className="border border-gray-300 px-2 py-2">
+                  {editingItem === item.id ? (
+                    <input
+                      type="text"
+                      name="description"
+                      value={formData.description}
+                      onChange={handleChange}
+                      className="border-2 border-gray-300 p-1 rounded-md"
+                    />
+                  ) : (
+                    item.description
+                  )}
+                </td>
+                <td className="border border-gray-300 px-2 py-2 text-right">
+                  {editingItem === item.id ? (
+                    <input
+                      type="number"
+                      name="qty"
+                      value={formData.qty}
+                      onChange={handleChange}
+                      className="border-2 border-gray-300 p-1 rounded-md"
+                    />
+                  ) : (
+                    item.quantity
+                  )}
+                </td>
+
+                <td className="border border-gray-300 px-2 text-center py-2">
                   <button
-                    aria-label="Edit item"
                     onClick={() => handleEdit(item)}
-                    className="bg-blue-500 text-white flex items-center justify-center w-8 h-8 rounded-md hover:bg-blue-600 transition duration-200 shadow-md"
+                    className="bg-blue-500 text-white p-1 rounded-md"
                   >
                     <PencilSquareIcon className="w-4 h-4" />
                   </button>
-                  <button
-                    aria-label="Delete item"
-                    onClick={() => openDeleteDialog(item.id)}
-                    className="bg-red-500 text-white flex items-center justify-center w-8 h-8 rounded-md hover:bg-red-600 transition duration-200 shadow-md"
+                </td>
+
+                <td className="border border-gray-300 px-2 text-center py-2">
+                  <Switch
+                    checked={!!enabledItems[item.id]}
+                    onChange={() => handleToggleChange(item.id)}
+                    className={`group relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent 
+                ${enabledItems[item.id] ? "bg-green-600" : "bg-red-600"} 
+                transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2`}
                   >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
+                    <span className="sr-only">Use setting</span>
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 
+                  transition duration-200 ease-in-out ${
+                    enabledItems[item.id] ? "translate-x-5" : ""
+                  }`}
+                    />
+                  </Switch>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        <div className="flex justify-center mt-4">
+          <button
+            className="border-2 p-2 rounded-md flex items-center text-white bg-green-600"
+            type="button" // Changed to type="button" to prevent form submission
+            onClick={(e) => handleSubmit(e)} // Ensure handleSubmit works for saving
+          >
+            <IoSaveOutline className="w-5 h-5 mr-1" />
+            <span>Save</span>
+          </button>
+        </div>
       </div>
 
       <div className="my-5 flex justify-end">
@@ -269,20 +343,6 @@ export default function Home() {
           <span>Download</span>
         </button>
       </div>
-
-      {/* Delete Confirmation Dialog */}
-      {isDeleteDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-75 transition-opacity overflow-y-auto">
-          <div className="bg-white p-3 rounded-md shadow-xl transition-all">
-            <h2 className="text-lg font-bold">Confirm Deletion</h2>
-            <p>Are you sure you want to delete this item?</p>
-            <div className="mt-4 flex justify-end space-x-2">
-              <button onClick={() => setDeleteDialogOpen(false)} className="px-4 py-2 bg-gray-300 rounded">Cancel</button>
-              <button onClick={handleDelete} className="px-4 py-2 bg-red-600 text-white rounded">Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
